@@ -211,8 +211,8 @@ purely diagnostic; if it ever feeds the API, fold it into SQLite too.
 
 ## 9. Open questions (resolve before the relevant phase)
 
-- **Client framework:** .NET 8 (modern, recommended) vs staying on .NET Framework 4.8 for parity with
-  legacy. Affects Phase 0/2 library choices.
+- ~~**Client framework:** .NET 8 vs .NET Framework 4.8.~~ **Resolved:** targeting **`net9.0-windows`**
+  (matches the installed SDK; runs on Windows 10). WinForms UI authored in code.
 - **Identity model at the API:** per-**user** login token, per-**device** key, or both? Affects `/auth`.
 - **Adapter naming:** real interface names per PC ("Ethernet" / "Wi-Fi" / vendor names) for the toggle
   commands; the install script should detect rather than hardcode.
