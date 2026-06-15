@@ -148,37 +148,61 @@ purely diagnostic; if it ever feeds the API, fold it into SQLite too.
 
 ---
 
-## 5. Cloud API contract (we own it) [locked direction, details TBD]
+## 5. Cloud API contract — grounded in the real backend (we own it)
 
-### `POST /auth/login`
-- Request: `{ "email": "...", "password": "..." }` (or device credential — see Open questions).
-- Response: `{ "token": "...", "expiresAt": "...", "serverTimeUtc": "..." }`
-- `serverTimeUtc` lets the client measure **clock skew** while it's online (relevant: this is time
-  tracking, so a manipulated client clock is a threat). Re-auth each window is fine — connections are rare.
+The web app / API lives at `equicom-legacy/backend` — **Express 4 + Mongoose/MongoDB**, JWT auth
+(`jsonwebtoken`), bcrypt, base path `/api/v1`, port 4000. We reuse its auth and extend its
+time-tracking module with one new idempotent endpoint.
 
-### `POST /timeTracking/intervals` (authenticated)
-- Request: a **batch** —
+### Auth — reuse the existing login [locked]
+- **`POST /api/v1/auth/login`** `{ email, password }` → bcrypt check → returns a JWT in the body:
+  `jwt.sign({ email, id, role }, JWT_SECRET, { expiresIn: '7d' })`. Also set as an httpOnly cookie.
+- The desktop client logs in during the connected window, stores the JWT (DPAPI), and sends it as
+  **`Authorization: Bearer <token>`**. The `auth` middleware sets `req.user = { email, id, role }`,
+  so the ingest handler derives `employeeId` from the token — the client need not send an email.
+- 7-day expiry, **no refresh token**. Connections are rare, so just re-login each window if expired.
+- Offline UI login can additionally use the existing **`POST /api/v1/auth/authenticate-employee`**
+  (validate without issuing a JWT) for credential caching.
+
+### ⚠️ Do NOT use the existing `/timeTracking/add` for the new client
+`POST /api/v1/timeTracking/add` `{ employeeEmail, seconds }` does
+`findOneAndUpdate(..., { $inc: { totalTrackedSeconds, remainingTrackedSeconds } }, { upsert })`.
+The only unique index is `(employeeId, date)` — **one row per day, but `$inc` re-adds on every call.**
+A retried batch (inevitable for an occasionally-connected client) would **double-count**. This endpoint
+has no idempotency and must not receive retried data.
+
+### New endpoint — `POST /api/v1/timeTracking/intervals` (authenticated, idempotent) [to build]
+- **Protected** by the `auth` middleware (Bearer JWT). `employeeId` comes from `req.user.id`.
+- Request — a **batch** of client intervals:
   ```json
   [
-    { "id": "<guid>", "userId": "...", "windowStartUtc": "...", "windowEndUtc": "...",
+    { "id": "<client-guid>", "windowStartUtc": "...", "windowEndUtc": "...",
       "activeSeconds": 240, "clientSentUtc": "..." }
   ]
   ```
-- Server: **dedupes on `id`** (idempotent upsert), aggregates server-side, records server-receipt time.
-- Response: the list of **accepted `id`s**, so the client marks exactly those as `sent` →
-  enables partial success without double-counting.
+- Idempotency via a **new `ProcessedInterval` collection** keyed by the client GUID
+  (`_id = id`, unique). Insert the batch with `{ ordered: false }`; duplicates are rejected by the
+  unique key, so **only newly-inserted intervals** contribute. Then `$inc` the matching
+  `DailyTrackedWork` day rows by the sum of *newly-accepted* seconds — keeping the existing daily
+  aggregation (dashboards keep working) while making retries safe.
+- Response: the list of **accepted `id`s** so the client marks exactly those `sent` (partial success,
+  no double-count).
+- Optionally return `serverTimeUtc` so the client can measure **clock skew** while online (this is time
+  tracking — a manipulated client clock is a threat).
 
 ### Security
-- TLS, token auth, payload validation, rate limiting (public endpoint now hit by many PCs directly).
+- TLS, Bearer auth, payload validation, rate limiting (endpoint now hit by many PCs directly).
 - Idempotency is mandatory: long offline buffering + retries make duplicate submissions a *when*, not an *if*.
 
 ---
 
 ## 6. Auth & security on the client [locked]
 
-- **Offline login** for the UI: keep cached credential verification (BCrypt) so users can log in with
-  no internet.
-- **API token** obtained during a connected window; stored with **Windows DPAPI** (per-user encryption).
+- **API token = the JWT** from `POST /api/v1/auth/login` (payload `{ email, id, role }`, 7-day expiry).
+  Obtained during a connected window, stored with **Windows DPAPI** (per-user encryption), sent as
+  `Authorization: Bearer <token>`. No refresh token → re-login each window if expired.
+- **Offline login** for the UI when there's no internet: cached credential verification (bcrypt), and/or
+  the backend's `authenticate-employee` endpoint when a window happens to be open.
 - **Clock-skew defense:** capture `serverTimeUtc` on connect; flag/correct large drift.
 
 ---
@@ -230,3 +254,34 @@ purely diagnostic; if it ever feeds the API, fold it into SQLite too.
   and aggregates server-side.
 - Legacy logout already attempted a 2-second final sync + a shutdown snapshot — good instinct, but too
   short and with no connectivity handling. The revamp generalizes this into the window + durable queue.
+
+---
+
+## 11. Legacy backend integration facts (reference)
+
+Source: `equicom-legacy/backend` (Express 4, Mongoose/MongoDB, ES modules, port 4000, base `/api/v1`).
+
+**Auth**
+- `middlewares/auth.js`: `auth` reads token from `body.token | cookies.token | Authorization: Bearer`,
+  `jwt.verify(token, JWT_SECRET)`, sets `req.user = decoded`. Role guards: `isAdmin`, `isManagement`,
+  `isEmployee`, `isManagementOrSelf`.
+- `POST /api/v1/auth/login` → `{ email, password }`, bcrypt compare, `jwt.sign({ email, id, role },
+  JWT_SECRET, { expiresIn: '7d' })`, token in body + httpOnly cookie. No refresh token.
+- Desktop-oriented endpoints already exist: `POST /api/v1/auth/authenticate-employee` (validate, no JWT)
+  and `GET /api/v1/auth/sync-credentials` (guarded by `x-server-token` = `SERVER_AUTH_TOKEN`).
+- User model: discriminator on `role` (`ADMIN | MANAGEMENT | EMPLOYEE | CLIENT_USER`); password bcrypt
+  hashed (salt rounds 10) in the controller.
+
+**Time tracking**
+- `routes/timeTracking.route.js` → `POST /add` (`addTrackedSeconds`), `POST /time`, `POST /weekly-summary`.
+  Controller: `controllers/timeTracking/dailyTrackedWork.controller.js`. **No auth on these today.**
+- `/add` body `{ employeeEmail, seconds }` → look up user by email → `findOneAndUpdate` with
+  `$inc: { remainingTrackedSeconds, totalTrackedSeconds }`, `upsert: true`, day normalized to UTC midnight.
+- Model `models/timeTracking/dailyTrackedWork.model.js`: `DailyTrackedWork { employeeId(ref User), date,
+  remainingTrackedSeconds, totalTrackedSeconds, totalAllocatedSeconds, untrackedAllocatedSeconds,
+  externalAllocatedSeconds, startTime, endTime, consumptionDetails[] }`, unique index `(employeeId, date)`,
+  `timestamps: true`. **No per-submission idempotency** — hence the new `ProcessedInterval` collection
+  (§5) keyed by the client GUID.
+
+**Env**
+- `JWT_SECRET`, `MONGODB_URL_*`, `PORT`, `SERVER_AUTH_TOKEN`, `NODE_ENV`.
