@@ -1,0 +1,71 @@
+# ---- .NET / Visual Studio ----
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+build/
+bld/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio cache / user files
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# Rider / JetBrains
+.idea/
+*.sln.iml
+
+# VS Code (keep shared workspace config)
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Build results / publish
+publish/
+*.binlog
+*.log
+
+# NuGet
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+project.lock.json
+project.fragment.lock.json
+
+# Test results
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+
+# Secrets / environment / local runtime data
+.env
+*.pfx
+appsettings.*.local.json
+secrets.json
+
+# Local SQLite databases & runtime data (do NOT commit captured user data)
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+[Dd]ata/
+
+# OS noise
+Thumbs.db
+ehthumbs.db
+desktop.ini
+.DS_Store
