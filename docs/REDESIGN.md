@@ -171,7 +171,12 @@ The only unique index is `(employeeId, date)` — **one row per day, but `$inc` 
 A retried batch (inevitable for an occasionally-connected client) would **double-count**. This endpoint
 has no idempotency and must not receive retried data.
 
-### New endpoint — `POST /api/v1/timeTracking/intervals` (authenticated, idempotent) [to build]
+### New endpoint — `POST /api/v1/timeTracking/intervals` (authenticated, idempotent) [BUILT]
+Implemented in the legacy backend:
+`routes/timeTracking.route.js` (route `+ auth`), `controllers/timeTracking/trackedIntervals.controller.js`,
+`models/timeTracking/processedInterval.model.js`. Idempotency uses a per-interval
+`updateOne(..., { upsert:true })` and counts only rows where `upsertedCount === 1`.
+
 - **Protected** by the `auth` middleware (Bearer JWT). `employeeId` comes from `req.user.id`.
 - Request — a **batch** of client intervals:
   ```json
