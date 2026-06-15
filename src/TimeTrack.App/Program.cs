@@ -1,5 +1,9 @@
 using System.Windows.Forms;
 using TimeTrack.App.Forms;
+using TimeTrack.App.Services;
+using TimeTrack.Core.Api;
+using TimeTrack.Core.Configuration;
+using TimeTrack.Core.Storage;
 
 namespace TimeTrack.App;
 
@@ -21,12 +25,25 @@ internal static class Program
 
         ApplicationConfiguration.Initialize();
 
-        // Login first. On success, tracking starts automatically (the main window).
-        using var login = new FrmLogin();
+        // ---- compose services ----
+        var baseDir = AppContext.BaseDirectory;
+        var dataDir = Path.Combine(baseDir, "Data");
+        Directory.CreateDirectory(dataDir);
+
+        var settings = AppSettings.Load(Path.Combine(baseDir, "appsettings.json"));
+
+        var outbox = new SqliteOutboxRepository(Path.Combine(dataDir, "timetrack.db"));
+        outbox.InitializeAsync().GetAwaiter().GetResult(); // one-time, at startup
+
+        var api = new TimeTrackApiClient(settings.Api.BaseUrl, timeoutSeconds: settings.Api.TimeoutSeconds);
+        var tokenStore = new DpapiTokenStore(Path.Combine(dataDir, "token.bin"));
+
+        // ---- login first; on success tracking starts automatically ----
+        using var login = new FrmLogin(api, tokenStore);
         if (login.ShowDialog() != DialogResult.OK)
             return;
 
-        Application.Run(new FrmMain(login.Email));
+        Application.Run(new FrmMain(settings, outbox, api, tokenStore, login.Email));
 
         _mutex.ReleaseMutex();
     }

@@ -2,27 +2,37 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 using TimeTrack.App.Ui;
+using TimeTrack.Core.Api;
+using TimeTrack.Core.Security;
 
 namespace TimeTrack.App.Forms;
 
 /// <summary>
-/// Screen 01 — Login. Email + password only. There is no "start work" button:
-/// tracking begins automatically the moment sign-in succeeds and this window closes.
+/// Screen 01 — Login. Email + password only. On a successful API login the JWT is
+/// stored (DPAPI) and the window closes; tracking then starts automatically.
 /// </summary>
 internal sealed class FrmLogin : AppForm
 {
     private const int Pad = 28;
 
+    private readonly TimeTrackApiClient _api;
+    private readonly ITokenStore _tokenStore;
+
     private readonly TextBox _email;
     private readonly TextBox _password;
+    private readonly RoundedButton _signIn;
+    private readonly Label _error;
 
     /// <summary>The signed-in user's email (valid only when DialogResult == OK).</summary>
     public string Email { get; private set; } = string.Empty;
 
-    public FrmLogin()
+    public FrmLogin(TimeTrackApiClient api, ITokenStore tokenStore)
     {
+        _api = api;
+        _tokenStore = tokenStore;
+
         Width = 360;
-        Height = 396;
+        Height = 420;
         int contentW = Width - Pad * 2;
 
         // ---- logo tile + app name ----
@@ -48,7 +58,7 @@ internal sealed class FrmLogin : AppForm
         int y = 152;
         Controls.Add(Caption("Email", Pad, y));
         var emailPanel = Field(Pad, y + 18, contentW);
-        _email = Input(emailPanel, "priya@company.com", isPassword: false);
+        _email = Input(emailPanel, "you@company.com", isPassword: false);
         Controls.Add(emailPanel);
 
         // ---- password (with reveal toggle) ----
@@ -56,7 +66,7 @@ internal sealed class FrmLogin : AppForm
         Controls.Add(Caption("Password", Pad, y));
         var pwPanel = Field(Pad, y + 18, contentW);
         _password = Input(pwPanel, "Password", isPassword: true);
-        _password.Width -= 30; // leave room for the eye toggle
+        _password.Width -= 30;
 
         var eye = new RoundedButton
         {
@@ -79,9 +89,25 @@ internal sealed class FrmLogin : AppForm
         pwPanel.Controls.Add(eye);
         Controls.Add(pwPanel);
 
+        // ---- error line ----
+        _error = new Label
+        {
+            Text = string.Empty,
+            Font = Theme.FontCaption,
+            ForeColor = Theme.DangerAccent,
+            AutoSize = false,
+            TextAlign = ContentAlignment.MiddleCenter,
+            BackColor = Color.Transparent,
+            Left = Pad,
+            Top = y + 64,
+            Width = contentW,
+            Height = 16
+        };
+        Controls.Add(_error);
+
         // ---- sign in ----
-        y += 76;
-        var signIn = new RoundedButton
+        y += 86;
+        _signIn = new RoundedButton
         {
             Text = "Sign in",
             FillColor = Theme.WorkPrimary,
@@ -91,9 +117,9 @@ internal sealed class FrmLogin : AppForm
             Width = contentW,
             Height = 44
         };
-        signIn.Click += (_, _) => TrySignIn();
-        Controls.Add(signIn);
-        AcceptButton = signIn;
+        _signIn.Click += async (_, _) => await TrySignInAsync();
+        Controls.Add(_signIn);
+        AcceptButton = _signIn;
 
         // ---- footnote ----
         var note = CenteredLabel("Time tracking starts automatically after you sign in",
@@ -103,18 +129,49 @@ internal sealed class FrmLogin : AppForm
         EnableDrag(this);
     }
 
-    private void TrySignIn()
+    private async Task TrySignInAsync()
     {
-        // Phase 4 will validate against cached credentials / the API.
-        // For now: require both fields to be present, then start tracking.
-        if (string.IsNullOrWhiteSpace(_email.Text) || string.IsNullOrWhiteSpace(_password.Text))
+        var email = _email.Text.Trim();
+        var password = _password.Text;
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
         {
+            _error.Text = "Enter your email and password.";
             return;
         }
 
-        Email = _email.Text.Trim();
-        DialogResult = DialogResult.OK;
-        Close();
+        _error.Text = string.Empty;
+        _signIn.Enabled = false;
+        _signIn.Text = "Signing in…";
+        try
+        {
+            var result = await _api.LoginAsync(email, password);
+            if (!result.Success)
+            {
+                _error.Text = result.Error ?? "Sign in failed.";
+                return;
+            }
+
+            _tokenStore.Save(new StoredToken
+            {
+                Token = result.Token,
+                Email = result.Email,
+                EmployeeId = result.EmployeeId,
+                Role = result.Role,
+                ObtainedUtc = DateTime.UtcNow
+            });
+
+            Email = result.Email;
+            DialogResult = DialogResult.OK;
+            Close();
+        }
+        finally
+        {
+            if (DialogResult != DialogResult.OK)
+            {
+                _signIn.Enabled = true;
+                _signIn.Text = "Sign in";
+            }
+        }
     }
 
     // ---- small layout helpers ----
