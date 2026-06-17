@@ -79,8 +79,12 @@ public sealed class ProxySettings
     /// Windows system proxy to <see cref="Address"/>:<see cref="Port"/>, and routes its own
     /// API traffic through that proxy. Debug builds ignore this (always direct) so a dev
     /// machine's browsing isn't disrupted.
+    ///
+    /// <para>Default is <b>false</b> (talk to the cloud directly) — correct for testing and any
+    /// environment with normal internet. Set it to <b>true</b> only on the locked-down client PCs
+    /// that have no continuous internet and must reach the cloud via the master proxy.</para>
     /// </summary>
-    public bool Enabled { get; set; } = true;
+    public bool Enabled { get; set; } = false;
 
     /// <summary>The master PC / gateway proxy address (same on every client).</summary>
     public string Address { get; set; } = "192.168.137.1";
