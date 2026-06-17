@@ -23,7 +23,7 @@ internal class RoundedPanel : Panel
     {
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
         var r = new Rectangle(0, 0, Width - 1, Height - 1);
-        using var path = Draw.RoundedRect(r, Radius);
+        using var path = Draw.RoundedRect(r, DpiScale.Scale(Radius));
 
         using (var fill = new SolidBrush(FillColor))
             e.Graphics.FillPath(fill, path);

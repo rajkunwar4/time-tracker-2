@@ -5,8 +5,9 @@ using System.Windows.Forms;
 namespace TimeTrack.App.Ui;
 
 /// <summary>
-/// Flat, rounded button honouring the design tokens. Supports a solid (filled)
-/// style and an outline style.
+/// Flat, rounded button honouring the design tokens. Supports a solid (filled) style and
+/// an outline style. Fully owner-drawn and <b>opaque</b> (UserPaint + clear-to-surface each
+/// paint) so the outline style never composites stale form content through its interior.
 /// </summary>
 internal class RoundedButton : Button
 {
@@ -21,37 +22,41 @@ internal class RoundedButton : Button
         FlatAppearance.BorderSize = 0;
         FlatAppearance.MouseOverBackColor = Color.Transparent;
         FlatAppearance.MouseDownBackColor = Color.Transparent;
-        BackColor = Color.Transparent;
         ForeColor = Color.White;
         Font = Theme.FontButton;
         Cursor = Cursors.Hand;
-        SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.OptimizedDoubleBuffer, true);
+        // Own all painting, double-buffered, no transparent compositing.
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
     }
 
-    protected override void OnPaintBackground(PaintEventArgs pevent)
-    {
-        // Skip the default background so the parent's surface shows through the corners.
-    }
+    /// <summary>The opaque surface the button sits on (its parent's colour, or the app surface).</summary>
+    private Color Backdrop =>
+        (Parent != null && Parent.BackColor != Color.Transparent) ? Parent.BackColor : Theme.Surface;
 
     protected override void OnPaint(PaintEventArgs e)
     {
-        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        var g = e.Graphics;
+        g.Clear(Backdrop);                 // opaque clear — no leftover/composited pixels
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+
         var r = new Rectangle(0, 0, Width - 1, Height - 1);
-        using var path = Draw.RoundedRect(r, Radius);
+        using var path = Draw.RoundedRect(r, DpiScale.Scale(Radius));
 
         if (Outline)
         {
+            using (var fill = new SolidBrush(Backdrop))   // interior = surface colour
+                g.FillPath(fill, path);
             using var pen = new Pen(OutlineColor, 1f);
-            e.Graphics.DrawPath(pen, path);
+            g.DrawPath(pen, path);
         }
         else
         {
             using var fill = new SolidBrush(FillColor);
-            e.Graphics.FillPath(fill, path);
+            g.FillPath(fill, path);
         }
 
         TextRenderer.DrawText(
-            e.Graphics, Text, Font, r, ForeColor,
+            g, Text, Font, r, ForeColor,
             TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
     }
 }

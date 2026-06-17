@@ -1,4 +1,5 @@
 using System.Drawing;
+using TimeTrack.App.Ui;
 
 namespace TimeTrack.App;
 
@@ -26,6 +27,7 @@ internal static class Theme
     public static readonly Color TextPrimary  = Hex("2C2C2A"); // timer, titles, values
     public static readonly Color TextSecondary = Hex("888780"); // captions, labels, email
     public static readonly Color TextMuted    = Hex("B4B2A9"); // footnotes, hints, paused timer
+    public static readonly Color LogoutText   = Hex("5F5E5A"); // outline logout button text (spec 05)
     public static readonly Color DangerBg     = Hex("FCEBEB"); // sync-failed halo
     public static readonly Color DangerAccent = Hex("A32D2D");
     public static readonly Color DarkStrip    = Hex("1E1E1E"); // logging countdown strip
@@ -38,7 +40,10 @@ internal static class Theme
     public const int RadiusCard   = 6;
     public const int RadiusBar    = 4;
 
-    // ---- Typography (Segoe UI; sizes in px) ----
+    // ---- Typography (Segoe UI; spec sizes given in px) ----
+    // Fonts are authored in the spec's logical (96-DPI) pixels and multiplied by the
+    // process DPI factor (see DpiScale), so they render at the correct physical size on
+    // scaled displays. WinForms auto-scaling is OFF, so this is the only scaling applied.
     // 500-weight tokens use "Segoe UI Semibold"; body/caption use regular.
     public static readonly Font FontDisplayTimer = Semibold(44f);
     public static readonly Font FontDialogTitle  = Semibold(15f);
@@ -51,8 +56,8 @@ internal static class Theme
     public static readonly Font FontBody         = Regular(12f);
     public static readonly Font FontCaption      = Regular(11f);
 
-    private static Font Semibold(float px) => new("Segoe UI Semibold", px, FontStyle.Regular, GraphicsUnit.Pixel);
-    private static Font Regular(float px)  => new("Segoe UI", px, FontStyle.Regular, GraphicsUnit.Pixel);
+    private static Font Semibold(float px) => new("Segoe UI Semibold", DpiScale.ScaleF(px), FontStyle.Regular, GraphicsUnit.Pixel);
+    private static Font Regular(float px)  => new("Segoe UI", DpiScale.ScaleF(px), FontStyle.Regular, GraphicsUnit.Pixel);
 
     public static Color Hex(string hex)
     {

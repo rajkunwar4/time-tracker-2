@@ -7,6 +7,7 @@ public sealed class AppSettings
 {
     public ApiSettings Api { get; set; } = new();
     public TrackingSettings Tracking { get; set; } = new();
+    public StartupSettings Startup { get; set; } = new();
 
     private static readonly JsonSerializerOptions Opts = new()
     {
@@ -48,4 +49,13 @@ public sealed class TrackingSettings
 
     /// <summary>How many seconds of tracking accumulate before an interval is queued.</summary>
     public int WindowSeconds { get; set; } = 60;
+}
+
+public sealed class StartupSettings
+{
+    /// <summary>
+    /// Register the app to launch automatically at Windows sign-in (per-user, non-admin).
+    /// Set to false on a development machine to stop the build auto-launching each logon.
+    /// </summary>
+    public bool RunAtLogon { get; set; } = true;
 }

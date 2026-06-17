@@ -10,123 +10,137 @@ namespace TimeTrack.App.Forms;
 /// <summary>
 /// Screen 01 — Login. Email + password only. On a successful API login the JWT is
 /// stored (DPAPI) and the window closes; tracking then starts automatically.
+///
+/// <para>Built with a single-column <see cref="TableLayoutPanel"/>; vertical rhythm comes
+/// from control margins, not absolute coordinates, so it reflows and DPI-scales cleanly.</para>
 /// </summary>
 internal sealed class FrmLogin : AppForm
 {
-    private const int Pad = 28;
+    private const int DesignWidth = 360;
 
     private readonly TimeTrackApiClient _api;
     private readonly ITokenStore _tokenStore;
 
+    private readonly TableLayoutPanel _root;
     private readonly TextBox _email;
     private readonly TextBox _password;
     private readonly RoundedButton _signIn;
     private readonly Label _error;
 
-    /// <summary>The signed-in user's email (valid only when DialogResult == OK).</summary>
-    public string Email { get; private set; } = string.Empty;
+    /// <summary>Raised with the signed-in user's email after a successful login.</summary>
+    public event Action<string>? LoginSucceeded;
 
     public FrmLogin(TimeTrackApiClient api, ITokenStore tokenStore)
     {
         _api = api;
         _tokenStore = tokenStore;
 
-        Width = 360;
-        Height = 420;
-        int contentW = Width - Pad * 2;
+        ClientSize = new Size(Dpi(DesignWidth), Dpi(440));
 
-        // ---- logo tile + app name ----
-        var logo = new Panel { Width = 48, Height = 48, Left = (Width - 48) / 2, Top = 28, BackColor = Color.Transparent };
-        logo.Paint += (_, e) =>
+        _root = new TableLayoutPanel
         {
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            using var p = Draw.RoundedRect(new Rectangle(0, 0, 47, 47), Theme.RadiusCard);
-            using var b = new SolidBrush(Theme.WorkPillBg);
-            e.Graphics.FillPath(b, p);
-            TextRenderer.DrawText(e.Graphics, "TT", Theme.FontAppNameLg, new Rectangle(0, 0, 48, 48),
-                Theme.WorkDeep, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 1,
+            BackColor = Theme.Surface,
+            Padding = new Padding(Dpi(28), Dpi(26), Dpi(28), Dpi(24))
         };
-        Controls.Add(logo);
+        _root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Dpi(DesignWidth - 56))); // 28px padding each side
+
+        // ---- logo tile (clock glyph) ----
+        var logo = new Panel
+        {
+            Width = Dpi(48),
+            Height = Dpi(48),
+            BackColor = Color.Transparent,
+            Anchor = AnchorStyles.None,
+            Margin = new Padding(0, 0, 0, Dpi(14))
+        };
+        logo.Paint += PaintLogo;
         EnableDrag(logo);
 
-        var appName = CenteredLabel("TimeTrack", Theme.FontAppNameLg, Theme.TextPrimary, 86, 26);
-        var subtitle = CenteredLabel("Sign in to start your day", Theme.FontBody, Theme.TextSecondary, 114, 18);
+        // ---- title + subtitle ----
+        var appName = Centered("TimeTrack", Theme.FontAppNameLg, Theme.TextPrimary, new Padding(0, 0, 0, Dpi(2)));
+        var subtitle = Centered("Sign in to start your day", Theme.FontBody, Theme.TextSecondary, new Padding(0, 0, 0, Dpi(22)));
         EnableDrag(appName);
         EnableDrag(subtitle);
 
         // ---- email ----
-        int y = 152;
-        Controls.Add(Caption("Email", Pad, y));
-        var emailPanel = Field(Pad, y + 18, contentW);
-        _email = Input(emailPanel, "you@company.com", isPassword: false);
-        Controls.Add(emailPanel);
+        var emailCaption = Caption("Email");
+        var emailField = Field(out _email, "you@company.com", isPassword: false, trailing: null);
+        emailField.Margin = new Padding(0, Dpi(6), 0, Dpi(16));
 
         // ---- password (with reveal toggle) ----
-        y += 70;
-        Controls.Add(Caption("Password", Pad, y));
-        var pwPanel = Field(Pad, y + 18, contentW);
-        _password = Input(pwPanel, "Password", isPassword: true);
-        _password.Width -= 30;
-
-        var eye = new RoundedButton
+        var passwordCaption = Caption("Password");
+        var toggle = new RoundedButton
         {
             Outline = true,
             OutlineColor = Color.Transparent,
             ForeColor = Theme.TextSecondary,
-            Font = Theme.FontBody,
+            Font = Theme.FontCaption,
             Text = "show",
-            Width = 40,
-            Height = 24,
-            Top = (pwPanel.Height - 24) / 2,
-            Left = pwPanel.Width - 46
+            Width = Dpi(42),
+            Dock = DockStyle.Right,
+            Margin = Padding.Empty,
+            TabStop = false   // reveal toggle shouldn't be in the tab order (email → password → sign in)
         };
-        eye.Click += (_, _) =>
+        var passwordField = Field(out _password, "Password", isPassword: true, trailing: toggle);
+        passwordField.Margin = new Padding(0, Dpi(6), 0, Dpi(10));
+        toggle.Click += (_, _) =>
         {
             _password.UseSystemPasswordChar = !_password.UseSystemPasswordChar;
-            eye.Text = _password.UseSystemPasswordChar ? "show" : "hide";
+            toggle.Text = _password.UseSystemPasswordChar ? "show" : "hide";
             _password.Focus();
         };
-        pwPanel.Controls.Add(eye);
-        Controls.Add(pwPanel);
 
-        // ---- error line ----
+        // ---- error line (reserves its row height) ----
         _error = new Label
         {
             Text = string.Empty,
             Font = Theme.FontCaption,
             ForeColor = Theme.DangerAccent,
             AutoSize = false,
+            Dock = DockStyle.Fill,
+            Height = Dpi(18),
             TextAlign = ContentAlignment.MiddleCenter,
             BackColor = Color.Transparent,
-            Left = Pad,
-            Top = y + 64,
-            Width = contentW,
-            Height = 16
+            Margin = new Padding(0, 0, 0, Dpi(6))
         };
-        Controls.Add(_error);
 
         // ---- sign in ----
-        y += 86;
         _signIn = new RoundedButton
         {
             Text = "Sign in",
             FillColor = Theme.WorkPrimary,
+            ForeColor = Color.White,
             Radius = Theme.RadiusCard,
-            Left = Pad,
-            Top = y,
-            Width = contentW,
-            Height = 44
+            Dock = DockStyle.Fill,
+            Height = Dpi(44),
+            Margin = new Padding(0, 0, 0, Dpi(16))
         };
         _signIn.Click += async (_, _) => await TrySignInAsync();
-        Controls.Add(_signIn);
         AcceptButton = _signIn;
 
         // ---- footnote ----
-        var note = CenteredLabel("Time tracking starts automatically after you sign in",
-            Theme.FontCaption, Theme.TextMuted, y + 56, 18);
+        var note = Centered("Time tracking starts automatically after you sign in",
+            Theme.FontCaption, Theme.TextMuted, Padding.Empty);
         EnableDrag(note);
 
-        EnableDrag(this);
+        foreach (var c in new Control[] { logo, appName, subtitle, emailCaption, emailField,
+                     passwordCaption, passwordField, _error, _signIn, note })
+            _root.Controls.Add(c);
+
+        // Pin the card to the design width; height auto-sizes to content.
+        _root.MinimumSize = new Size(Dpi(DesignWidth), 0);
+        _root.MaximumSize = new Size(Dpi(DesignWidth), 0);
+        MountCentered(_root);
+    }
+
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        LockMinimumToContent(_root, DesignWidth);
+        _email.Focus();
     }
 
     private async Task TrySignInAsync()
@@ -142,6 +156,7 @@ internal sealed class FrmLogin : AppForm
         _error.Text = string.Empty;
         _signIn.Enabled = false;
         _signIn.Text = "Signing in…";
+        bool ok = false;
         try
         {
             var result = await _api.LoginAsync(email, password);
@@ -160,13 +175,12 @@ internal sealed class FrmLogin : AppForm
                 ObtainedUtc = DateTime.UtcNow
             });
 
-            Email = result.Email;
-            DialogResult = DialogResult.OK;
-            Close();
+            ok = true;
+            LoginSucceeded?.Invoke(result.Email);
         }
         finally
         {
-            if (DialogResult != DialogResult.OK)
+            if (!ok)
             {
                 _signIn.Enabled = true;
                 _signIn.Text = "Sign in";
@@ -174,63 +188,85 @@ internal sealed class FrmLogin : AppForm
         }
     }
 
-    // ---- small layout helpers ----
-    private Label CenteredLabel(string text, Font font, Color color, int top, int height)
+    // ---- builders ----
+    private Label Centered(string text, Font font, Color color, Padding margin) => new()
     {
-        var l = new Label
-        {
-            Text = text,
-            Font = font,
-            ForeColor = color,
-            AutoSize = false,
-            TextAlign = ContentAlignment.MiddleCenter,
-            BackColor = Color.Transparent,
-            Left = 0,
-            Top = top,
-            Width = Width,
-            Height = height
-        };
-        Controls.Add(l);
-        return l;
-    }
+        Text = text,
+        Font = font,
+        ForeColor = color,
+        AutoSize = false,
+        Dock = DockStyle.Fill,
+        Height = font.Height + Dpi(2),
+        TextAlign = ContentAlignment.MiddleCenter,
+        BackColor = Color.Transparent,
+        Margin = margin
+    };
 
-    private static Label Caption(string text, int left, int top) => new()
+    private Label Caption(string text) => new()
     {
         Text = text,
         Font = Theme.FontCaption,
         ForeColor = Theme.TextSecondary,
         AutoSize = true,
         BackColor = Color.Transparent,
-        Left = left,
-        Top = top
+        Margin = new Padding(Dpi(2), 0, 0, 0)
     };
 
-    private static RoundedPanel Field(int left, int top, int width) => new()
+    private RoundedPanel Field(out TextBox box, string placeholder, bool isPassword, RoundedButton? trailing)
     {
-        Left = left,
-        Top = top,
-        Width = width,
-        Height = 40,
-        Radius = Theme.RadiusCard,
-        FillColor = Theme.Surface,
-        BorderColor = Theme.Border
-    };
+        var host = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            Height = Dpi(40),
+            Radius = Theme.RadiusCard,
+            FillColor = Theme.Surface,
+            BorderColor = Theme.Border,
+            Padding = new Padding(Dpi(12), 0, Dpi(8), 0)
+        };
 
-    private static TextBox Input(RoundedPanel host, string placeholder, bool isPassword)
-    {
-        var tb = new TextBox
+        var input = new TextBox
         {
             BorderStyle = BorderStyle.None,
             Font = Theme.FontBody,
             ForeColor = Theme.TextPrimary,
-            BackColor = host.FillColor,
+            BackColor = Theme.Surface,
             PlaceholderText = placeholder,
-            Left = 12,
-            Top = (host.Height - Theme.FontBody.Height) / 2,
-            Width = host.Width - 24,
             UseSystemPasswordChar = isPassword
         };
-        host.Controls.Add(tb);
-        return tb;
+
+        // Vertically centre the (single-line, non-dockable-height) textbox inside the host.
+        var center = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent };
+        center.Controls.Add(input);
+        input.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top;
+        void CenterInput()
+        {
+            input.Top = Math.Max(0, (center.Height - input.Height) / 2);
+            input.Left = 0;
+            input.Width = center.Width;
+        }
+        center.Resize += (_, _) => CenterInput();
+        center.HandleCreated += (_, _) => CenterInput();
+
+        if (trailing != null) host.Controls.Add(trailing);
+        host.Controls.Add(center);
+        box = input;
+        return host;
+    }
+
+    private void PaintLogo(object? sender, PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        var tile = new Rectangle(0, 0, Dpi(48) - 1, Dpi(48) - 1);
+        using (var p = Draw.RoundedRect(tile, Theme.RadiusCard + Dpi(4)))
+        using (var b = new SolidBrush(Theme.WorkPillBg))
+            g.FillPath(b, p);
+
+        // simple clock glyph
+        int cx = tile.Width / 2, cy = tile.Height / 2, r = Dpi(11);
+        using var pen = new Pen(Theme.WorkDeep, Dpi(2)) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+        g.DrawEllipse(pen, cx - r, cy - r, r * 2, r * 2);
+        g.DrawLine(pen, cx, cy, cx, cy - r + Dpi(4));          // hour hand (up)
+        g.DrawLine(pen, cx, cy, cx + r - Dpi(5), cy + Dpi(2)); // minute hand
     }
 }

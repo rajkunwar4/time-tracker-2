@@ -1,5 +1,4 @@
 using System.Windows.Forms;
-using TimeTrack.App.Forms;
 using TimeTrack.App.Services;
 using TimeTrack.Core.Api;
 using TimeTrack.Core.Configuration;
@@ -32,18 +31,23 @@ internal static class Program
 
         var settings = AppSettings.Load(Path.Combine(baseDir, "appsettings.json"));
 
+        // Register (or remove) auto-start at Windows sign-in.
+        // Debug builds never auto-launch (dev convenience) and clear any stale key;
+        // shipped Release builds honor the appsettings toggle.
+#if DEBUG
+        AutoStart.Apply(false);
+#else
+        AutoStart.Apply(settings.Startup.RunAtLogon);
+#endif
+
         var outbox = new SqliteOutboxRepository(Path.Combine(dataDir, "timetrack.db"));
         outbox.InitializeAsync().GetAwaiter().GetResult(); // one-time, at startup
 
         var api = new TimeTrackApiClient(settings.Api.BaseUrl, timeoutSeconds: settings.Api.TimeoutSeconds);
         var tokenStore = new DpapiTokenStore(Path.Combine(dataDir, "token.bin"));
 
-        // ---- login first; on success tracking starts automatically ----
-        using var login = new FrmLogin(api, tokenStore);
-        if (login.ShowDialog() != DialogResult.OK)
-            return;
-
-        Application.Run(new FrmMain(settings, outbox, api, tokenStore, login.Email));
+        // The context owns the always-on lifecycle: login ⇄ main, minimize-to-tray.
+        Application.Run(new TrackerAppContext(settings, outbox, api, tokenStore));
 
         _mutex.ReleaseMutex();
     }

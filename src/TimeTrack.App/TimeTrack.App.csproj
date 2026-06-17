@@ -20,6 +20,9 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Per-monitor DPI awareness so the borderless windows stay crisp and correctly
+         sized on high-DPI / scaled displays (consumed by ApplicationConfiguration.Initialize). -->
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <!-- UI is authored in code, not the WinForms visual designer, so the
          designer-serialization analyzer (WFO1000) does not apply. -->
     <NoWarn>$(NoWarn);WFO1000</NoWarn>

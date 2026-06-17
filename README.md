@@ -51,13 +51,23 @@ interrupted sync simply retries in the next window, with no double-counting.
 - **Redesigned API**: token auth + idempotent batch ingest that dedupes on client ID.
 - **DPAPI** for token storage; **offline login** retained; **server-time capture** for clock-skew defense.
 
-See **[docs/REDESIGN.md](docs/REDESIGN.md)** for the full blueprint: architecture, the internet-window
-mechanism (with concrete scheduled-task definitions), the SQLite schema, the API contract, and the
-phased execution plan.
+## Documentation
+
+Full docs live in **[docs/](docs/README.md)**:
+
+- **[docs/SETUP.md](docs/SETUP.md)** — set up a dev machine, run the backend + client, run the tests.
+- **[docs/HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md)** — the current core logic: tracking, the durable
+  outbox, idempotent sync, auth, and the server-side ingest, file-by-file.
+- **[docs/REDESIGN.md](docs/REDESIGN.md)** — the full blueprint/vision: architecture, the
+  internet-window mechanism (with concrete scheduled-task definitions), the SQLite schema, the API
+  contract, and the phased execution plan.
 
 ## Status
 
-Early planning / scaffolding. No application code yet — the design blueprint is in `docs/`.
+Working vertical slice: the .NET 9 WinForms client (login → activity tracking → durable SQLite
+outbox → idempotent batch sync) runs end-to-end against the cloud API. Still to come: the
+time-boxed internet-window scheduled task, offline login, and auto-start/packaging — see
+[docs/HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md#12-whats-not-built-yet).
 
 ## Relationship to the legacy repo
 
