@@ -1,13 +1,13 @@
 # Planning — Lifecycle, Always-On, and the Internet Window
 
-A living planning doc. **Phases 1 & 2 are now built** (window lifecycle/tray + auto-start);
-the internet window and offline login are still planned. We refine *this* instead of
+A living planning doc. **Window lifecycle/tray, auto-start, and offline login are now built**;
+the internet window (proxy toggle) is the remaining piece. We refine *this* instead of
 re-deriving it each time.
 
 Status tags: ✅ **Decided** · 🔶 **Proposed (confirm)** · ❓ **Open (needs your / infra input)** · 🛠️ **Built**
 
-**Implemented so far:** 🛠️ §1 window chrome + lifecycle + tray, 🛠️ §2 auto-start at sign-in.
-Remaining: §3 internet window, §4 offline login.
+**Implemented so far:** 🛠️ §1 window chrome + lifecycle + tray, 🛠️ §2 auto-start at sign-in,
+🛠️ §4 offline login. Remaining: §3 the internet window (proxy toggle).
 
 ---
 
@@ -127,10 +127,13 @@ accepting that.
 
 ## 4. Supporting decisions (proposed defaults — confirm)
 
-- 🔶 **Offline login.** First login online; afterward sign-in works with internet off by validating
-  against a **DPAPI-protected verifier** (salted hash, never the raw password). Required because
-  Wi-Fi/internet is normally off at the start of the day. Needs **token-refresh-when-online** since
-  the server JWT expires in 7 days and offline stretches may outlast it.
+- 🛠️ **Offline login — BUILT.** First login online (caches a DPAPI-protected **PBKDF2 verifier** —
+  salted hash, never the raw password); afterward sign-in works when the server is unreachable by
+  validating against it, and the user tracks locally. A reachable server rejecting the password is a
+  hard failure. Token refresh is the simple model: the JWT refreshes whenever the user next signs in
+  online; if offline > 7 days the cached token expires and sync waits (data stays queued) until
+  reconnect — no backend change. ([`PasswordVerifier`](../src/TimeTrack.Core/Security/PasswordVerifier.cs),
+  [`FrmLogin`](../src/TimeTrack.App/Forms/FrmLogin.cs).)
 - 🔶 **Sync timing.** Auto-sync when a window is open + a manual **"Sync now"** (tray) + flush at
   logout.
 - 🔶 **Offline logout.** Allow logout immediately; data stays in the durable outbox and syncs in the
@@ -144,7 +147,7 @@ accepting that.
 
 1. 🛠️ **Lifecycle + chrome** — title bar, resize/min-size, logout→login loop, tray + minimize-to-tray. **Done.**
 2. 🛠️ **Auto-start** — `HKCU\…\Run` entry on startup (Debug-gated). **Done.**
-3. **Offline login** — cached verifier + token refresh. Security-sensitive; isolate and test hard. ← next
+3. 🛠️ **Offline login** — cached PBKDF2 verifier (DPAPI). **Done.**
 4. **Internet window** — implement the **`IInternetWindow`** abstraction + default proxy-toggle impl
    + config (`Proxy.MasterIp`/`Port`/`MaxWindowMinutes`), wired into the sync flow: open → confirm
    cloud reachable → sync → close (with the exit/timer failsafe). The gateway is treated as working.

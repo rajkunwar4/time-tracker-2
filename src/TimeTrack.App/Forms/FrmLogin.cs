@@ -160,23 +160,36 @@ internal sealed class FrmLogin : AppForm
         try
         {
             var result = await _api.LoginAsync(email, password);
-            if (!result.Success)
+
+            if (result.Success)
+            {
+                // Online: persist the session token and cache a verifier for future offline sign-ins.
+                _tokenStore.Save(new StoredToken
+                {
+                    Token = result.Token,
+                    Email = result.Email,
+                    EmployeeId = result.EmployeeId,
+                    Role = result.Role,
+                    ObtainedUtc = DateTime.UtcNow,
+                    PasswordVerifier = PasswordVerifier.Hash(password)
+                });
+                ok = true;
+                LoginSucceeded?.Invoke(result.Email);
+            }
+            else if (result.Unreachable && TryOfflineLogin(email, password, out var offlineEmail))
+            {
+                // Server unreachable but the credentials match the cached verifier → track locally.
+                ok = true;
+                LoginSucceeded?.Invoke(offlineEmail);
+            }
+            else if (result.Unreachable)
+            {
+                _error.Text = "Can't reach the server, and no saved offline sign-in for this account.";
+            }
+            else
             {
                 _error.Text = result.Error ?? "Sign in failed.";
-                return;
             }
-
-            _tokenStore.Save(new StoredToken
-            {
-                Token = result.Token,
-                Email = result.Email,
-                EmployeeId = result.EmployeeId,
-                Role = result.Role,
-                ObtainedUtc = DateTime.UtcNow
-            });
-
-            ok = true;
-            LoginSucceeded?.Invoke(result.Email);
         }
         finally
         {
@@ -186,6 +199,22 @@ internal sealed class FrmLogin : AppForm
                 _signIn.Text = "Sign in";
             }
         }
+    }
+
+    /// <summary>
+    /// Validate credentials against the locally cached verifier (set on the last online login).
+    /// Only the last online-signed-in account on this PC can sign in offline.
+    /// </summary>
+    private bool TryOfflineLogin(string email, string password, out string cachedEmail)
+    {
+        cachedEmail = string.Empty;
+        var cached = _tokenStore.Load();
+        if (cached is null || string.IsNullOrEmpty(cached.PasswordVerifier)) return false;
+        if (!string.Equals(cached.Email, email, StringComparison.OrdinalIgnoreCase)) return false;
+        if (!PasswordVerifier.Verify(password, cached.PasswordVerifier)) return false;
+
+        cachedEmail = cached.Email;
+        return true;
     }
 
     // ---- builders ----

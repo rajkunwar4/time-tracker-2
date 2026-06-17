@@ -8,6 +8,13 @@ public sealed class StoredToken
     public string EmployeeId { get; set; } = string.Empty;
     public string Role { get; set; } = string.Empty;
     public DateTime ObtainedUtc { get; set; }
+
+    /// <summary>
+    /// PBKDF2 verifier of the password from the last successful online login, used to
+    /// authenticate offline sign-ins. Encoded as "iterations.saltBase64.hashBase64";
+    /// never the raw password. Null until the first online login.
+    /// </summary>
+    public string? PasswordVerifier { get; set; }
 }
 
 /// <summary>

@@ -13,10 +13,17 @@ public sealed class LoginResult
     public string Email { get; init; } = string.Empty;
     public string Role { get; init; } = string.Empty;
 
+    /// <summary>True when the failure was a network/transport error (server not reachable),
+    /// as opposed to a reachable server rejecting the credentials. Drives the offline-login fallback.</summary>
+    public bool Unreachable { get; init; }
+
     public static LoginResult Ok(string token, string employeeId, string email, string role) =>
         new() { Success = true, Token = token, EmployeeId = employeeId, Email = email, Role = role };
 
     public static LoginResult Fail(string error) => new() { Success = false, Error = error };
+
+    public static LoginResult FailUnreachable(string error) =>
+        new() { Success = false, Error = error, Unreachable = true };
 }
 
 public sealed class IngestResult

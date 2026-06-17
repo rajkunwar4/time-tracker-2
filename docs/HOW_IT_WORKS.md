@@ -304,19 +304,23 @@ under `src/TimeTrack.App/Ui/`.
 
 ---
 
-## 12. What's not built yet
+## 12. Built recently / still to build
 
-These are part of the design ([REDESIGN.md](REDESIGN.md)) but **not in the current code** —
-useful to know so the docs don't overclaim:
+**Recently built** (see [PLANNING.md](PLANNING.md) for the full plan):
+- **Window lifecycle & tray** — standard resizable window; login⇆main loop; close→tray
+  ([`TrackerAppContext`](../src/TimeTrack.App/TrackerAppContext.cs)).
+- **Auto-start at sign-in** — per-user `HKCU\…\Run`, non-admin
+  ([`AutoStart`](../src/TimeTrack.App/Services/AutoStart.cs)).
+- **Offline login** — on a successful online login, [`FrmLogin`](../src/TimeTrack.App/Forms/FrmLogin.cs)
+  caches a DPAPI-protected **PBKDF2 verifier** ([`PasswordVerifier`](../src/TimeTrack.Core/Security/PasswordVerifier.cs));
+  if the server is later *unreachable*, the same credentials authenticate offline and the user
+  tracks locally. A reachable server rejecting the password is still a hard failure.
 
-- **Time-boxed internet window via a pre-installed SYSTEM scheduled task** (toggling
-  whole-machine internet on for ~15 min with an auto-disable failsafe). Today, logout calls
-  the API directly and assumes connectivity is available; `FrmMain.LogoutAndSyncAsync` notes
-  this is where the Phase-5 internet-window + sync dialogs will slot in.
-- **Offline login.** `FrmLogin` currently always calls the live API; the offline-capable
-  login described in the blueprint (validating against cached credentials) is not yet
-  implemented.
-- **Auto-start at logon** and the installer/packaging story.
+**Still to build:**
+- **Internet window** — the programmatic proxy toggle (`192.168.137.1:808`) that grants
+  internet only during a sync; today logout/sync assume connectivity is available. See
+  [PLANNING.md §3](PLANNING.md).
+- **Installer / packaging** story.
 - **Retry backoff / poison-message handling.** `attempt_count` is recorded but not yet used
   to delay or quarantine repeatedly-failing intervals.
 

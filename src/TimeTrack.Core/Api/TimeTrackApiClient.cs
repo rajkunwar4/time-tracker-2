@@ -42,7 +42,8 @@ public sealed class TimeTrackApiClient
         }
         catch (Exception ex)
         {
-            return LoginResult.Fail($"Could not reach the server: {ex.Message}");
+            // Network/timeout error — server unreachable (vs. a reachable server rejecting creds).
+            return LoginResult.FailUnreachable($"Could not reach the server: {ex.Message}");
         }
     }
 
