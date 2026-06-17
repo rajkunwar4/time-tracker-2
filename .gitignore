@@ -1,3 +1,6 @@
+# ---- local developer config override (never shipped) ----
+appsettings.Local.json
+
 # ---- .NET / Visual Studio ----
 [Bb]in/
 [Oo]bj/

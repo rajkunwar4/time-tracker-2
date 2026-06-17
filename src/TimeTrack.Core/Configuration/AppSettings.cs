@@ -15,14 +15,22 @@ public sealed class AppSettings
         PropertyNameCaseInsensitive = true
     };
 
-    /// <summary>Load from the given path; returns defaults if the file is missing or invalid.</summary>
+    /// <summary>
+    /// Load configuration. A sibling <c>appsettings.Local.json</c>, if present, takes precedence
+    /// over <paramref name="path"/> — this is the gitignored developer override (e.g. pointing at a
+    /// local backend) and is never shipped, so released clients always use the production
+    /// <c>appsettings.json</c>. Missing/invalid files fall back to the built-in defaults below.
+    /// </summary>
     public static AppSettings Load(string path)
     {
+        var dir = Path.GetDirectoryName(path);
+        var localPath = dir is null ? "appsettings.Local.json" : Path.Combine(dir, "appsettings.Local.json");
+        var effectivePath = File.Exists(localPath) ? localPath : path;
         try
         {
-            if (File.Exists(path))
+            if (File.Exists(effectivePath))
             {
-                var json = File.ReadAllText(path);
+                var json = File.ReadAllText(effectivePath);
                 return JsonSerializer.Deserialize<AppSettings>(json, Opts) ?? new AppSettings();
             }
         }
@@ -36,8 +44,11 @@ public sealed class AppSettings
 
 public sealed class ApiSettings
 {
-    /// <summary>Base URL of the Equicom API, including the /api/v1 prefix.</summary>
-    public string BaseUrl { get; set; } = "http://127.0.0.1:4000/api/v1";
+    /// <summary>
+    /// Base URL of the Equicom API, including the /api/v1 prefix. Default is the production
+    /// cloud API; override per deployment in appsettings.json (or appsettings.Local.json for dev).
+    /// </summary>
+    public string BaseUrl { get; set; } = "https://backend.software.equicom.co/api/v1";
 
     /// <summary>HTTP timeout for API calls, in seconds.</summary>
     public int TimeoutSeconds { get; set; } = 15;

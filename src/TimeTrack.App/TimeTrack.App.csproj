@@ -12,6 +12,11 @@
     <None Update="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- Developer-only local override (gitignored). Copied to output in Debug only, so it
+         is never included in a Release/published build that ships to clients. -->
+    <None Update="appsettings.Local.json" Condition="Exists('appsettings.Local.json') And '$(Configuration)' == 'Debug'">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <PropertyGroup>
