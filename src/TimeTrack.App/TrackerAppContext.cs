@@ -6,6 +6,7 @@ using TimeTrack.Core.Api;
 using TimeTrack.Core.Configuration;
 using TimeTrack.Core.Security;
 using TimeTrack.Core.Storage;
+using TimeTrack.Core.Sync;
 
 namespace TimeTrack.App;
 
@@ -21,6 +22,7 @@ internal sealed class TrackerAppContext : ApplicationContext
     private readonly IOutboxRepository _outbox;
     private readonly TimeTrackApiClient _api;
     private readonly ITokenStore _tokenStore;
+    private readonly IInternetWindow _internetWindow;
 
     private readonly NotifyIcon _tray;
     private readonly ToolStripMenuItem _syncItem;
@@ -28,12 +30,13 @@ internal sealed class TrackerAppContext : ApplicationContext
     private FrmMain? _main;
 
     public TrackerAppContext(AppSettings settings, IOutboxRepository outbox,
-        TimeTrackApiClient api, ITokenStore tokenStore)
+        TimeTrackApiClient api, ITokenStore tokenStore, IInternetWindow internetWindow)
     {
         _settings = settings;
         _outbox = outbox;
         _api = api;
         _tokenStore = tokenStore;
+        _internetWindow = internetWindow;
 
         var menu = new ContextMenuStrip();
         menu.Items.Add(new ToolStripMenuItem("Open", null, (_, _) => RestoreCurrent()));
@@ -65,7 +68,7 @@ internal sealed class TrackerAppContext : ApplicationContext
 
     private void ShowMain(string email)
     {
-        var main = new FrmMain(_settings, _outbox, _api, _tokenStore, email);
+        var main = new FrmMain(_settings, _outbox, _api, _tokenStore, _internetWindow, email);
         main.LogoutRequested += ShowLogin;
         Swap(main);
         _main = main;

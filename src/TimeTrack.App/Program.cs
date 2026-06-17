@@ -1,8 +1,11 @@
+using System.Net;
+using System.Net.Http;
 using System.Windows.Forms;
 using TimeTrack.App.Services;
 using TimeTrack.Core.Api;
 using TimeTrack.Core.Configuration;
 using TimeTrack.Core.Storage;
+using TimeTrack.Core.Sync;
 
 namespace TimeTrack.App;
 
@@ -43,11 +46,42 @@ internal static class Program
         var outbox = new SqliteOutboxRepository(Path.Combine(dataDir, "timetrack.db"));
         outbox.InitializeAsync().GetAwaiter().GetResult(); // one-time, at startup
 
-        var api = new TimeTrackApiClient(settings.Api.BaseUrl, timeoutSeconds: settings.Api.TimeoutSeconds);
+        // Internet window: in Release with Proxy.Enabled, route the app's traffic through the
+        // master proxy and toggle the whole-PC system proxy around syncs. Debug builds stay
+        // direct (NoOp) so a dev machine's browsing is never disrupted.
+#if DEBUG
+        bool proxyActive = false;
+#else
+        bool proxyActive = settings.Proxy.Enabled;
+#endif
+
+        HttpClient? http = null;
+        if (proxyActive)
+        {
+            var handler = new HttpClientHandler
+            {
+                Proxy = new WebProxy($"{settings.Proxy.Address}:{settings.Proxy.Port}") { BypassProxyOnLocal = true },
+                UseProxy = true
+            };
+            http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(settings.Api.TimeoutSeconds) };
+        }
+
+        var api = new TimeTrackApiClient(settings.Api.BaseUrl, http, settings.Api.TimeoutSeconds);
         var tokenStore = new DpapiTokenStore(Path.Combine(dataDir, "token.bin"));
 
-        // The context owns the always-on lifecycle: login ⇄ main, minimize-to-tray.
-        Application.Run(new TrackerAppContext(settings, outbox, api, tokenStore));
+        IInternetWindow internetWindow = proxyActive
+            ? new SystemProxyInternetWindow(settings.Proxy)
+            : new NoOpInternetWindow();
+
+        try
+        {
+            // The context owns the always-on lifecycle: login ⇄ main, minimize-to-tray.
+            Application.Run(new TrackerAppContext(settings, outbox, api, tokenStore, internetWindow));
+        }
+        finally
+        {
+            (internetWindow as IDisposable)?.Dispose();   // failsafe: clear the proxy on exit
+        }
 
         _mutex.ReleaseMutex();
     }

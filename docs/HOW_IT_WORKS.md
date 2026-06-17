@@ -315,11 +315,13 @@ under `src/TimeTrack.App/Ui/`.
   caches a DPAPI-protected **PBKDF2 verifier** ([`PasswordVerifier`](../src/TimeTrack.Core/Security/PasswordVerifier.cs));
   if the server is later *unreachable*, the same credentials authenticate offline and the user
   tracks locally. A reachable server rejecting the password is still a hard failure.
+- **Internet window** — sync opens a time-boxed window before flushing and closes it after
+  ([`IInternetWindow`](../src/TimeTrack.Core/Sync/IInternetWindow.cs)). Release toggles the Windows
+  system proxy to the master gateway (`192.168.137.1:808`) with a WinINET refresh + exit/timer
+  failsafe ([`SystemProxyInternetWindow`](../src/TimeTrack.App/Services/SystemProxyInternetWindow.cs));
+  Debug stays direct (NoOp).
 
 **Still to build:**
-- **Internet window** — the programmatic proxy toggle (`192.168.137.1:808`) that grants
-  internet only during a sync; today logout/sync assume connectivity is available. See
-  [PLANNING.md §3](PLANNING.md).
 - **Installer / packaging** story.
 - **Retry backoff / poison-message handling.** `attempt_count` is recorded but not yet used
   to delay or quarantine repeatedly-failing intervals.

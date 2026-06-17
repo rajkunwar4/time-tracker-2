@@ -8,6 +8,7 @@ public sealed class AppSettings
     public ApiSettings Api { get; set; } = new();
     public TrackingSettings Tracking { get; set; } = new();
     public StartupSettings Startup { get; set; } = new();
+    public ProxySettings Proxy { get; set; } = new();
 
     private static readonly JsonSerializerOptions Opts = new()
     {
@@ -58,4 +59,24 @@ public sealed class StartupSettings
     /// Set to false on a development machine to stop the build auto-launching each logon.
     /// </summary>
     public bool RunAtLogon { get; set; } = true;
+}
+
+public sealed class ProxySettings
+{
+    /// <summary>
+    /// When true, the app opens a time-boxed internet window for syncing by toggling the
+    /// Windows system proxy to <see cref="Address"/>:<see cref="Port"/>, and routes its own
+    /// API traffic through that proxy. Debug builds ignore this (always direct) so a dev
+    /// machine's browsing isn't disrupted.
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>The master PC / gateway proxy address (same on every client).</summary>
+    public string Address { get; set; } = "192.168.137.1";
+
+    /// <summary>The proxy port.</summary>
+    public int Port { get; set; } = 808;
+
+    /// <summary>Failsafe: auto-close the window (clear the proxy) after this many minutes.</summary>
+    public int MaxWindowMinutes { get; set; } = 15;
 }

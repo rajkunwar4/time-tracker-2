@@ -1,13 +1,13 @@
 # Planning — Lifecycle, Always-On, and the Internet Window
 
-A living planning doc. **Window lifecycle/tray, auto-start, and offline login are now built**;
-the internet window (proxy toggle) is the remaining piece. We refine *this* instead of
+A living planning doc. **All four areas are now built** — window lifecycle/tray, auto-start,
+offline login, and the internet window (proxy toggle). We refine *this* instead of
 re-deriving it each time.
 
 Status tags: ✅ **Decided** · 🔶 **Proposed (confirm)** · ❓ **Open (needs your / infra input)** · 🛠️ **Built**
 
-**Implemented so far:** 🛠️ §1 window chrome + lifecycle + tray, 🛠️ §2 auto-start at sign-in,
-🛠️ §4 offline login. Remaining: §3 the internet window (proxy toggle).
+**Implemented:** 🛠️ §1 window chrome + lifecycle + tray, 🛠️ §2 auto-start at sign-in,
+🛠️ §3 internet window (proxy toggle), 🛠️ §4 offline login.
 
 ---
 
@@ -67,9 +67,12 @@ This is the area that changed most from the original blueprint and has open infr
   short and auto-close.
 - ✅ **Client = static LAN IP**, **no proxy auth**.
 
-### Default approach — abstract the toggle behind an interface
-`IInternetWindow` (`OpenAsync()` / `CloseAsync()`) keeps the rest of the app agnostic to the lever.
-Concrete implementation:
+### Default approach — abstract the toggle behind an interface — 🛠️ BUILT
+[`IInternetWindow`](../src/TimeTrack.Core/Sync/IInternetWindow.cs) (`OpenAsync()` / `CloseAsync()`)
+keeps the rest of the app agnostic to the lever; the sync flow wraps open → confirm reachable →
+flush → close ([`FrmMain`](../src/TimeTrack.App/Forms/FrmMain.cs)). Debug builds use `NoOpInternetWindow`
+(no proxy touched); Release uses [`SystemProxyInternetWindow`](../src/TimeTrack.App/Services/SystemProxyInternetWindow.cs)
+when `Proxy.Enabled`. Concrete implementation:
 
 - **Open:** in `HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings`, set
   `ProxyServer = "192.168.137.1:808"` and `ProxyEnable = 1`, then notify WinINET
@@ -148,7 +151,7 @@ accepting that.
 1. 🛠️ **Lifecycle + chrome** — title bar, resize/min-size, logout→login loop, tray + minimize-to-tray. **Done.**
 2. 🛠️ **Auto-start** — `HKCU\…\Run` entry on startup (Debug-gated). **Done.**
 3. 🛠️ **Offline login** — cached PBKDF2 verifier (DPAPI). **Done.**
-4. **Internet window** — implement the **`IInternetWindow`** abstraction + default proxy-toggle impl
-   + config (`Proxy.MasterIp`/`Port`/`MaxWindowMinutes`), wired into the sync flow: open → confirm
-   cloud reachable → sync → close (with the exit/timer failsafe). The gateway is treated as working.
-   Only loose end: confirm LAN-reachability while offline.
+4. 🛠️ **Internet window** — `IInternetWindow` + `SystemProxyInternetWindow` (HKCU proxy toggle +
+   WinINET refresh + exit/timer failsafe), config `Proxy.{Enabled,Address,Port,MaxWindowMinutes}`,
+   wired into the sync flow (open → confirm reachable → flush → close). Debug = NoOp. **Done.**
+   Loose end (deploy-time): confirm the master is reachable / LAN behaviour on real client PCs.

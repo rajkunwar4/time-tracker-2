@@ -47,6 +47,23 @@ public sealed class TimeTrackApiClient
         }
     }
 
+    /// <summary>
+    /// True if the API host responds at all (any HTTP status). Used after opening an internet
+    /// window to confirm connectivity before attempting a flush.
+    /// </summary>
+    public async Task<bool> IsReachableAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            using var resp = await _http.GetAsync(_baseUrl, ct).ConfigureAwait(false);
+            return true; // any response (even 404) means the host is reachable
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     /// <summary>POST /timeTracking/intervals (Bearer) → accepted interval ids.</summary>
     public async Task<IngestResult> PostIntervalsAsync(string token, IReadOnlyList<IntervalRecord> records, CancellationToken ct = default)
     {

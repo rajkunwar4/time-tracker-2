@@ -28,6 +28,8 @@ internal sealed class FrmMain : AppForm
     private readonly AppSettings _settings;
     private readonly IOutboxRepository _outbox;
     private readonly ITokenStore _tokenStore;
+    private readonly TimeTrackApiClient _api;
+    private readonly IInternetWindow _internet;
     private readonly OutboxSyncService _sync;
     private readonly WindowedIntervalCollector _collector;
     private readonly string _email;
@@ -56,11 +58,13 @@ internal sealed class FrmMain : AppForm
     public event Action? LogoutRequested;
 
     public FrmMain(AppSettings settings, IOutboxRepository outbox, TimeTrackApiClient api,
-        ITokenStore tokenStore, string email)
+        ITokenStore tokenStore, IInternetWindow internetWindow, string email)
     {
         _settings = settings;
         _outbox = outbox;
         _tokenStore = tokenStore;
+        _api = api;
+        _internet = internetWindow;
         _sync = new OutboxSyncService(outbox, api);
         _email = email;
         _collector = new WindowedIntervalCollector(email, settings.Tracking.WindowSeconds);
@@ -332,7 +336,7 @@ internal sealed class FrmMain : AppForm
             }
             else
             {
-                var result = await _sync.FlushAsync(token);
+                var result = await FlushWithInternetAsync(token);
                 var pending = await _outbox.CountPendingAsync();
                 if (result.Success)
                     MessageBox.Show($"Synced {result.AcceptedCount} interval(s). {pending} still queued.",
@@ -354,9 +358,29 @@ internal sealed class FrmMain : AppForm
         if (_loggingOut) return;
         var token = _tokenStore.Load()?.Token;
         if (string.IsNullOrEmpty(token)) return;
-        try { await _sync.FlushAsync(token); }
+        try { await FlushWithInternetAsync(token); }
         catch { /* anything unsent stays queued for next time */ }
         await UpdatePendingAsync();
+    }
+
+    /// <summary>
+    /// Open a time-boxed internet window, confirm connectivity, flush the outbox, then close
+    /// it. The window is the proxy toggle (or a no-op in dev); the failsafe guarantees it
+    /// closes even if this throws.
+    /// </summary>
+    private async Task<SyncResult> FlushWithInternetAsync(string token)
+    {
+        await _internet.OpenAsync();
+        try
+        {
+            if (!await _api.IsReachableAsync())
+                return SyncResult.Failed(0, "no connectivity in the internet window");
+            return await _sync.FlushAsync(token);
+        }
+        finally
+        {
+            await _internet.CloseAsync();
+        }
     }
 
     private void ToggleBreak()
