@@ -22,7 +22,7 @@
   <PropertyGroup>
     <!-- Client-visible version (surfaced in the UI via AppInfo). Bump on every build
          shipped to a client so iterations are distinguishable at a glance. -->
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0-windows</TargetFramework>
     <Nullable>enable</Nullable>

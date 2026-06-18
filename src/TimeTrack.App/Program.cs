@@ -12,18 +12,28 @@ namespace TimeTrack.App;
 internal static class Program
 {
     private static Mutex? _mutex;
+    private const string MutexName = "TimeTrack_SingleInstance_Mutex";
+    private const string ShowWindowSignalName = "TimeTrack_ShowWindow_Event";
 
     [STAThread]
     private static void Main()
     {
         // Single instance — only one tracker per machine session.
-        _mutex = new Mutex(initiallyOwned: true, "TimeTrack_SingleInstance_Mutex", out bool createdNew);
+        _mutex = new Mutex(initiallyOwned: true, MutexName, out bool createdNew);
         if (!createdNew)
         {
-            MessageBox.Show("TimeTrack is already running.", "TimeTrack",
-                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            // Already running (the live instance sits in the tray). Signal it to surface its
+            // window, then exit silently — no "already running" dialog for the user to dismiss.
+            if (EventWaitHandle.TryOpenExisting(ShowWindowSignalName, out var existing))
+            {
+                existing.Set();
+                existing.Dispose();
+            }
             return;
         }
+
+        // Primary instance: the signal that any later launch sets to ask us to show our window.
+        var showWindowSignal = new EventWaitHandle(false, EventResetMode.AutoReset, ShowWindowSignalName);
 
         ApplicationConfiguration.Initialize();
 
@@ -76,11 +86,12 @@ internal static class Program
         try
         {
             // The context owns the always-on lifecycle: login ⇄ main, minimize-to-tray.
-            Application.Run(new TrackerAppContext(settings, outbox, api, tokenStore, internetWindow));
+            Application.Run(new TrackerAppContext(settings, outbox, api, tokenStore, internetWindow, showWindowSignal));
         }
         finally
         {
             (internetWindow as IDisposable)?.Dispose();   // failsafe: clear the proxy on exit
+            showWindowSignal.Dispose();
         }
 
         _mutex.ReleaseMutex();

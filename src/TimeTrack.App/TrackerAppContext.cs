@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using TimeTrack.App.Forms;
 using TimeTrack.Core.Api;
@@ -26,17 +27,23 @@ internal sealed class TrackerAppContext : ApplicationContext
 
     private readonly NotifyIcon _tray;
     private readonly ToolStripMenuItem _syncItem;
+    private readonly EventWaitHandle _showWindowSignal;
+    private readonly Thread _signalThread;
+    private volatile bool _stopping;
     private Form? _current;
     private FrmMain? _main;
 
     public TrackerAppContext(AppSettings settings, IOutboxRepository outbox,
-        TimeTrackApiClient api, ITokenStore tokenStore, IInternetWindow internetWindow)
+        TimeTrackApiClient api, ITokenStore tokenStore, IInternetWindow internetWindow,
+        EventWaitHandle showWindowSignal)
     {
         _settings = settings;
         _outbox = outbox;
         _api = api;
         _tokenStore = tokenStore;
         _internetWindow = internetWindow;
+        _showWindowSignal = showWindowSignal;
+        _signalThread = new Thread(SignalLoop) { IsBackground = true, Name = "TimeTrack-ShowSignal" };
 
         var menu = new ContextMenuStrip();
         // Non-clickable header so the running build's version is always discoverable.
@@ -57,6 +64,9 @@ internal sealed class TrackerAppContext : ApplicationContext
         _tray.DoubleClick += (_, _) => RestoreCurrent();
 
         ShowLogin();
+
+        // Listen for "show yourself" pokes from any second launch of the exe.
+        _signalThread.Start();
     }
 
     private void ShowLogin()
@@ -111,11 +121,45 @@ internal sealed class TrackerAppContext : ApplicationContext
 
     private void RestoreCurrent()
     {
-        if (_current == null) return;
-        _current.Show();
-        _current.WindowState = FormWindowState.Normal;
-        _current.Activate();
+        var form = _current;
+        if (form == null || form.IsDisposed) return;
+
+        if (!form.Visible) form.Show();
+        if (form.WindowState == FormWindowState.Minimized)
+            form.WindowState = FormWindowState.Normal;
+
+        // Windows blocks a background process from stealing focus, so Activate() alone often
+        // just flashes the taskbar button. Toggling TopMost and then SetForegroundWindow
+        // reliably raises the window to the front.
+        form.TopMost = true;
+        form.TopMost = false;
+        form.Activate();
+        SetForegroundWindow(form.Handle);
     }
+
+    /// <summary>
+    /// Background loop: a second launch of the app sets <see cref="_showWindowSignal"/>
+    /// (instead of opening a new window) to ask this live instance to surface itself.
+    /// </summary>
+    private void SignalLoop()
+    {
+        while (!_stopping)
+        {
+            try { _showWindowSignal.WaitOne(); }
+            catch (ObjectDisposedException) { return; }
+            if (_stopping) return;
+
+            var form = _current;
+            if (form is { IsDisposed: false, IsHandleCreated: true })
+            {
+                // Marshal back to the UI thread — RestoreCurrent touches WinForms state.
+                try { form.BeginInvoke(new Action(RestoreCurrent)); }
+                catch (InvalidOperationException) { /* form torn down mid-swap; ignore */ }
+            }
+        }
+    }
+
+    [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
 
     private async Task SyncNowAsync()
     {
@@ -145,6 +189,8 @@ internal sealed class TrackerAppContext : ApplicationContext
     {
         if (disposing)
         {
+            _stopping = true;
+            try { _showWindowSignal.Set(); } catch { /* primary owns disposal in Program */ }
             _tray.Visible = false;
             _tray.Dispose();
         }
