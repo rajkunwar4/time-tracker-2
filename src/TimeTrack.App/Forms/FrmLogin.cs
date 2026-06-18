@@ -126,8 +126,12 @@ internal sealed class FrmLogin : AppForm
             Theme.FontCaption, Theme.TextMuted, Padding.Empty);
         EnableDrag(note);
 
+        // ---- version ----
+        var version = Centered(AppInfo.VersionLabel, Theme.FontCaption, Theme.TextMuted, new Padding(0, Dpi(10), 0, 0));
+        EnableDrag(version);
+
         foreach (var c in new Control[] { logo, appName, subtitle, emailCaption, emailField,
-                     passwordCaption, passwordField, _error, _signIn, note })
+                     passwordCaption, passwordField, _error, _signIn, note, version })
             _root.Controls.Add(c);
 
         // Pin the card to the design width; height auto-sizes to content.

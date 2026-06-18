@@ -39,6 +39,9 @@ internal sealed class TrackerAppContext : ApplicationContext
         _internetWindow = internetWindow;
 
         var menu = new ContextMenuStrip();
+        // Non-clickable header so the running build's version is always discoverable.
+        menu.Items.Add(new ToolStripMenuItem($"{AppInfo.Name} {AppInfo.VersionLabel}") { Enabled = false });
+        menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(new ToolStripMenuItem("Open", null, (_, _) => RestoreCurrent()));
         _syncItem = new ToolStripMenuItem("Sync now", null, async (_, _) => await SyncNowAsync()) { Enabled = false };
         menu.Items.Add(_syncItem);
@@ -63,7 +66,7 @@ internal sealed class TrackerAppContext : ApplicationContext
         Swap(login);
         _main = null;
         _syncItem.Enabled = false;
-        _tray.Text = "TimeTrack — signed out";
+        _tray.Text = $"{AppInfo.Name} {AppInfo.VersionLabel} — signed out";
     }
 
     private void ShowMain(string email)
@@ -73,7 +76,8 @@ internal sealed class TrackerAppContext : ApplicationContext
         Swap(main);
         _main = main;
         _syncItem.Enabled = true;
-        _tray.Text = "TimeTrack — " + email;
+        // NotifyIcon.Text caps at 63 chars — keep version + email within it.
+        _tray.Text = Truncate($"{AppInfo.Name} {AppInfo.VersionLabel} — {email}", 63);
     }
 
     /// <summary>Show the next window and tear down the previous one (deferred, off the event stack).</summary>
@@ -117,6 +121,9 @@ internal sealed class TrackerAppContext : ApplicationContext
     {
         if (_main != null) await _main.SyncNowAsync();
     }
+
+    private static string Truncate(string s, int max) =>
+        s.Length <= max ? s : s[..(max - 1)] + "…";
 
     private static Icon BuildTrayIcon()
     {

@@ -117,7 +117,10 @@ internal sealed class FrmMain : AppForm
         var cards = new TableLayoutPanel
         {
             Dock = DockStyle.Fill, AutoSize = false, ColumnCount = 3, RowCount = 1,
-            BackColor = Color.Transparent, Margin = new Padding(0, 0, 0, Dpi(16)), Height = Dpi(64)
+            BackColor = Color.Transparent, Margin = new Padding(0, 0, 0, Dpi(16)),
+            // Size to what the cards actually need at this machine's font metrics, never
+            // below the original design height. Fixes value text clipping on scaled displays.
+            Height = Math.Max(Dpi(64), StatCard.MeasureHeight())
         };
         for (int i = 0; i < 3; i++) cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / 3f));
         var cardLogged = new StatCard("Logged in", _loginTime.ToString("h:mm tt")) { Dock = DockStyle.Fill, Margin = new Padding(0, 0, Dpi(6), 0) };
@@ -212,8 +215,15 @@ internal sealed class FrmMain : AppForm
             AutoSize = true, BackColor = Color.Transparent, Margin = new Padding(0, Dpi(1), 0, 0)
         };
         EnableDrag(appName);
+        var version = new Label
+        {
+            Text = AppInfo.VersionLabel, Font = Theme.FontCaption, ForeColor = Theme.TextMuted,
+            AutoSize = true, BackColor = Color.Transparent, Margin = new Padding(Dpi(6), Dpi(5), 0, 0)
+        };
+        EnableDrag(version);
         left.Controls.Add(clock);
         left.Controls.Add(appName);
+        left.Controls.Add(version);
 
         var email = new Label
         {
